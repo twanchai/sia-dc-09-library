@@ -1,0 +1,97 @@
+# Java
+*.class
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.ear
+
+# Wrapper files
+wrapper.log*
+
+# Ignore objects and lib
+*.o
+*.so
+*.a
+*.obj
+
+# Ignore eclipse projets file
+.cproject
+.projet
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+# Program ID
+*.pid
+
+# IDEA
+*.iml
+*.ipr
+*.iws
+.idea/
+
+target/
+out/
+
+# Netbeans
+nbproject/private/
+temp/
+.sass-cache/
+nbbuild/
+dist/
+nbdist/
+nbactions*.xml
+nb-configuration.xml
+
+*.rrd
+
+node_modules/
+.tmp/
+
+# Development Environment
+dev-environment*/
+
+# Python
+*.pyc
+__pycache__
+*.log
+logs
+
+# Database files
+*.db
+
+# Linux
+*~
+
+# Git
+*.orig
+git.properties
+
+#LaTeX
+*.aux
+*.dvi
+*.lof
+*.log
+*.lot
+*.toc
+*.pdf
+_minted-specifications
+
+# Test UI unit test
+screenshot*
+
+ae-gui-alarms.obj
+ae-gui-configuration.obj
+
+# Snmp Mibs
+mibs*/
+
+# Docker
+#
+docker/openvpn-docker/bin/
+
+*.versionsBackup
