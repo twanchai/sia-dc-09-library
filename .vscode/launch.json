@@ -1,0 +1,52 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Launch Java Program",
+            "request": "launch",
+            "mainClass": ""
+        },
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "ManualUdpClientTest",
+            "request": "launch",
+            "mainClass": "ch.swissdotnet.siadc09.client.test.ManualUdpClientTest",
+            "projectName": "sia-dc-09-client",
+            "javaExec": "/Users/wanchai/.jdk/jdk-25.0.2/jdk-25.0.2+10/Contents/Home/bin/java"
+        },
+        {
+            "type": "java",
+            "name": "BothTcpUdpServerTestManual",
+            "request": "launch",
+            "mainClass": "ch.swissdotnet.siadc09.server.tests.BothTcpUdpServerTestManual",
+            "projectName": "sia-dc-09-server",
+            "javaExec": "/Users/wanchai/.jdk/jdk-25.0.2/jdk-25.0.2+10/Contents/Home/bin/java"
+        },
+        {
+            "type": "java",
+            "name": "TcpServerTestManual",
+            "request": "launch",
+            "mainClass": "ch.swissdotnet.siadc09.server.tests.TcpServerTestManual",
+            "projectName": "sia-dc-09-server",
+            "javaExec": "/Users/wanchai/.jdk/jdk-25.0.2/jdk-25.0.2+10/Contents/Home/bin/java"
+        },
+        {
+            "type": "java",
+            "name": "UdpServerTestManual",
+            "request": "launch",
+            "mainClass": "ch.swissdotnet.siadc09.server.tests.UdpServerTestManual",
+            "projectName": "sia-dc-09-server",
+            "javaExec": "/Users/wanchai/.jdk/jdk-25.0.2/jdk-25.0.2+10/Contents/Home/bin/java"
+        }
+    ]
+}
