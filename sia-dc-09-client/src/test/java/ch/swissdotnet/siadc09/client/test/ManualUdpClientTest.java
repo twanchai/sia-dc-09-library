@@ -58,7 +58,7 @@ public class ManualUdpClientTest {
         byte[] hexKey = Dc09Utils.hexStringToBytes("ABCDABCDABCDABCDABCDABCDABCDABCD");
         Dc09Spt spt1 = Dc09Spt.newSptBuilder("080027E62A64", new Dc09SptParameters(new AesCbcCipherAlgorithm(hexKey))).build();
 
-        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts("127.0.0.1", 33200))
+        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts("wanchai-j1900", 33200))
             .withTimeoutInSeconds(5)
             .build();
 
