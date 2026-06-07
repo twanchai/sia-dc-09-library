@@ -43,7 +43,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
 
         <slf4j.version>2.0.17</slf4j.version>
         <logback-classic.version>1.5.18</logback-classic.version>
@@ -52,7 +52,7 @@
         <jodatime.version>2.14.0</jodatime.version>
         <junit-5.version>5.13.0</junit-5.version>
 
-        <maven-source-plugin.version>2.4</maven-source-plugin.version>
+        <maven-source-plugin.version>3.3.0</maven-source-plugin.version>
         <license-maven-plugin.version>5.0.0</license-maven-plugin.version>
     </properties>
 
