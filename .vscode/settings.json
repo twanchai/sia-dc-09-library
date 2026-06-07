@@ -1,4 +1,6 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive",
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.jdt.ls.java.home": "/Users/wanchai/.jdk/jdk-25.0.2/jdk-25.0.2+10/Contents/Home",
+    "java.debug.settings.onBuildFailureProceed": true
 }
