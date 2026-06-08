@@ -56,10 +56,19 @@ public class ManualUdpClientTest {
     @Disabled
     @Test
     public void createClientSendEvent() throws InvalidCipheringException, IOException {
+        // Load client config
+        java.util.Properties cfg = new java.util.Properties();
+        try (java.io.InputStream is = getClass().getClassLoader()
+                .getResourceAsStream("sia-dc-09-client.properties")) {
+            if (is != null) cfg.load(is);
+        }
+        String host = cfg.getProperty("client.server.host", "localhost");
+        int    port = Integer.parseInt(cfg.getProperty("client.server.port", "50005"));
+
         byte[] hexKey = Dc09Utils.hexStringToBytes("ABCDABCDABCDABCDABCDABCDABCDABCD");
         Dc09Spt spt1 = Dc09Spt.newSptBuilder("080027E62A64", new Dc09SptParameters(new AesCbcCipherAlgorithm(hexKey))).build();
 
-        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts("wanchai-j1900", 50005))
+        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts(host, port))
             .withTimeoutInSeconds(5)
             .build();
 
@@ -70,7 +79,7 @@ public class ManualUdpClientTest {
         ClientResponseListener listener = new MyClientResponseListener();
         TniDc09Client client1 = tni.sender(listener).get();
 
-        printMenu();
+        printMenu(host, port);
         Scanner scanner = new Scanner(System.in);
         String line;
         while ((line = scanner.nextLine()) != null) {
@@ -96,17 +105,17 @@ public class ManualUdpClientTest {
                 }
                 default -> {
                     LOG.info("Unknown command: '{}'", line);
-                    printMenu();
+                    printMenu(host, port);
                 }
             }
         }
     }
 
-    private static void printMenu() {
+    private static void printMenu(final String host, final int port) {
         System.out.println();
         System.out.println("┌─────────────────────────────────────────┐");
         System.out.println("│  SIA DC-09 Manual Client                │");
-        System.out.println("│  Target: wanchai-j1900:50005  (UDP)      │");
+        System.out.printf( "│  Target: %-31s│%n", host + ":" + port + " (UDP)");
         System.out.println("├─────────────────────────────────────────┤");
         System.out.println("│  1 → Send NYS0021 (alarm event)         │");
         System.out.println("│  2 → Send NYK0021 (keypad event)        │");

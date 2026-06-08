@@ -53,6 +53,16 @@ public class BothTcpUdpServerTestManual {
         IncomingMessageLogger msgLogger = IncomingMessageLogger.fromConfig();
         msgLogger.open();
 
+        // Load server config
+        java.util.Properties cfg = new java.util.Properties();
+        try (java.io.InputStream is = getClass().getClassLoader()
+                .getResourceAsStream("sia-dc-09-server.properties")) {
+            if (is != null) cfg.load(is);
+        }
+        String bind        = cfg.getProperty("server.bind",           "0.0.0.0");
+        int    portPrimary = Integer.parseInt(cfg.getProperty("server.port.primary",   "50005"));
+        int    portSecondary = Integer.parseInt(cfg.getProperty("server.port.secondary", "50006"));
+
         Dc09TestSptStore store = new Dc09TestSptStore();
         byte[] hexKey = Dc09Utils.hexStringToBytes("ABCDABCDABCDABCDABCDABCDABCDABCD");
         Dc09Spt spt = Dc09Spt.newSptBuilder("080027E62A64", new Dc09SptParameters(new AesCbcCipherAlgorithm(hexKey))).build();
@@ -67,8 +77,8 @@ public class BothTcpUdpServerTestManual {
 
         SiaDc09Servers servers = new SiaDc09Servers(
             Lists.newArrayList(
-                RctDc09.newRctDc09("0.0.0.0", 50005, RctDc09.Transport.BOTH).build(),
-                RctDc09.newRctDc09("0.0.0.0", 50006, RctDc09.Transport.BOTH).build()
+                RctDc09.newRctDc09(bind, portPrimary,   RctDc09.Transport.BOTH).build(),
+                RctDc09.newRctDc09(bind, portSecondary, RctDc09.Transport.BOTH).build()
             ),
             new TransportParameters().setLogMessages(true),
             store,
@@ -147,7 +157,7 @@ public class BothTcpUdpServerTestManual {
 
         thread.start();
 
-        printBanner(msgLogger.isEnabled());
+        printBanner(msgLogger.isEnabled(), bind, portPrimary, portSecondary);
 
         int read = System.in.read();
         servers.setLogBytes(true).setLogMessages(true);
@@ -168,14 +178,15 @@ public class BothTcpUdpServerTestManual {
 
     // ── Pretty-print helpers ──────────────────────────────────────────────────
 
-    private static void printBanner(final boolean fileLogEnabled) {
+    private static void printBanner(final boolean fileLogEnabled, final String bind,
+                                    final int portPrimary, final int portSecondary) {
         String fileLog = fileLogEnabled ? "ON  (incoming-messages.log)" : "OFF (see server-log.properties)";
         System.out.println();
         System.out.println("╔════════════════════════════════════════════════════╗");
         System.out.println("║   SIA DC-09 Server  —  BothTcpUdp Mode            ║");
         System.out.println("╠════════════════════════════════════════════════════╣");
-        System.out.println("║  Listening on  0.0.0.0:50005   (TCP+UDP)           ║");
-        System.out.println("║  Listening on  0.0.0.0:50006   (TCP+UDP)           ║");
+        System.out.printf( "║  Listening on  %s:%-5d  (TCP+UDP)          ║%n", bind, portPrimary);
+        System.out.printf( "║  Listening on  %s:%-5d  (TCP+UDP)          ║%n", bind, portSecondary);
         System.out.println("║  Account       080027E62A64                        ║");
         System.out.println("║  Cipher        AES-CBC                             ║");
         System.out.printf( "║  File logging  %-35s║%n", fileLog);
