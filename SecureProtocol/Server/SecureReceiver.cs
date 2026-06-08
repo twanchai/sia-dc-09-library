@@ -174,7 +174,7 @@ namespace SecureProtocol
                 return;
             }
 
-            // ── Step 5: AES-128-CBC decrypt ────────────────────────────────────────
+            // ── Step 5: AES-128-CBC decrypt (or plaintext if AES not configured) ───
             if (_dscAesKey is null)
             {
                 Log($"└─ [{Ts()}] Step 5  FAIL — DSC key not configured");
@@ -183,19 +183,55 @@ namespace SecureProtocol
             }
 
             byte[] siaPayload;
-            try
+            bool keyIsDefault = IsAllZeros(_dscAesKey);
+
+            if (keyIsDefault)
             {
-                siaPayload = env.Decrypt(_dscAesKey);
-                var siaText = Encoding.ASCII.GetString(siaPayload).TrimEnd('\0');
-                Log($"│  [{Ts()}] Step 5  AES-128-CBC decrypt ✅ OK — {siaPayload.Length} bytes");
-                Log($"│           SIA payload: \"{siaText}\"");
+                // AES not programmed on device → payload sent as plaintext
+                siaPayload = TrimNulls(env.CipherBlock);
+                var raw16  = Encoding.ASCII.GetString(env.CipherBlock).TrimEnd('\0');
+                Log($"│  [{Ts()}] Step 5  AES not configured — reading payload as plaintext");
+                Log($"│           raw (16 bytes): \"{raw16}\"");
+
+                // Try Contact ID decode
+                var cid = ContactIdParser.TryParse(env.CipherBlock);
+                if (cid != null)
+                {
+                    Log($"│  [{Ts()}] Step 5  ✅ Contact ID decoded:");
+                    Log($"│           {cid}");
+                    Log($"│           → Account  : {cid.AccountRaw} ({cid.Account})");
+                    Log($"│           → Qualifier: [{cid.Qualifier}] {cid.QualText}");
+                    Log($"│           → Event    : [{cid.EventCode:000}] {cid.EventName}  (raw: {cid.EventRaw})");
+                    Log($"│           → Partition: {cid.Group:00}  Zone/User: {cid.Zone:000}");
+                    Log($"│           → Checksum : {(cid.CsValid ? "✅ valid" : "⚠️ invalid")}");
+                }
+                else
+                {
+                    Log($"│  [{Ts()}] Step 5  ⚠️  Not Contact ID — raw ASCII above");
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Log($"└─ [{Ts()}] Step 5  FAIL — AES-128-CBC decrypt error: {ex.Message}");
-                Log($"│           (wrong key or corrupted cipher block)");
-                await SendAckAsync(stream, false, "DSC_DECRYPT_FAIL", ct);
-                return;
+                try
+                {
+                    siaPayload = env.Decrypt(_dscAesKey);
+                    var siaText = Encoding.ASCII.GetString(siaPayload).TrimEnd('\0');
+                    Log($"│  [{Ts()}] Step 5  AES-128-CBC decrypt ✅ OK — {siaPayload.Length} bytes");
+                    Log($"│           decrypted: \"{siaText}\"");
+
+                    var cid = ContactIdParser.TryParse(siaPayload);
+                    if (cid != null)
+                    {
+                        Log($"│           ✅ Contact ID: {cid}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"└─ [{Ts()}] Step 5  FAIL — AES-128-CBC decrypt error: {ex.Message}");
+                    Log($"│           (wrong key or corrupted cipher block)");
+                    await SendAckAsync(stream, false, "DSC_DECRYPT_FAIL", ct);
+                    return;
+                }
             }
 
             Log($"└─ [{Ts()}] ✅ DSC ACCEPT — sending ACK");
@@ -354,6 +390,9 @@ namespace SecureProtocol
                                : $"Unknown scanner (signature: {lenBuf[0]:X2} {lenBuf[1]:X2} {lenBuf[2]:X2} {lenBuf[3]:X2})"
             };
         }
+
+        private static bool IsAllZeros(byte[] key) { foreach (var b in key) if (b != 0) return false; return true; }
+        private static byte[] TrimNulls(byte[] data) { int len = data.Length; while (len > 0 && data[len-1] == 0) len--; return data[..len]; }
 
         private static string PrintAscii(byte[] buf)
         {
