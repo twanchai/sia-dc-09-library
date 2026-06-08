@@ -59,7 +59,7 @@ public class ManualUdpClientTest {
         byte[] hexKey = Dc09Utils.hexStringToBytes("ABCDABCDABCDABCDABCDABCDABCDABCD");
         Dc09Spt spt1 = Dc09Spt.newSptBuilder("080027E62A64", new Dc09SptParameters(new AesCbcCipherAlgorithm(hexKey))).build();
 
-        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts("wanchai-j1900", 3061))
+        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts("wanchai-j1900", 50005))
             .withTimeoutInSeconds(5)
             .build();
 
@@ -106,7 +106,7 @@ public class ManualUdpClientTest {
         System.out.println();
         System.out.println("┌─────────────────────────────────────────┐");
         System.out.println("│  SIA DC-09 Manual Client                │");
-        System.out.println("│  Target: wanchai-j1900:3061  (UDP)      │");
+        System.out.println("│  Target: wanchai-j1900:50005  (UDP)      │");
         System.out.println("├─────────────────────────────────────────┤");
         System.out.println("│  1 → Send NYS0021 (alarm event)         │");
         System.out.println("│  2 → Send NYK0021 (keypad event)        │");

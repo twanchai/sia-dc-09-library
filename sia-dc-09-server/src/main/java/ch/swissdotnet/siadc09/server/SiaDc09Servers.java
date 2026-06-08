@@ -17,6 +17,7 @@ package ch.swissdotnet.siadc09.server;
 import ch.swissdotnet.siadc09.Dc09SptStore;
 import ch.swissdotnet.siadc09.TransportParameters;
 import ch.swissdotnet.siadc09.parameters.Dc09GlobalParameters;
+import ch.swissdotnet.siadc09.net.FrameUnwrapper;
 import ch.swissdotnet.siadc09.server.impl.TcpSiaDc09Server;
 import ch.swissdotnet.siadc09.server.impl.UdpSiaDc09Server;
 import ch.swissdotnet.siadc09.server.listeners.ServerMessageListener;
@@ -51,6 +52,8 @@ public final class SiaDc09Servers implements SiaDc09Server {
     private final ExecutorService onMessageExecutor;
     // The service executor used to create servers.
     private final ExecutorService executor;
+    // Optional proprietary frame unwrapper.
+    private final FrameUnwrapper frameUnwrapper;
 
     /**
      * Initializes a new {@code SiaDc09Servers} with given {@code RctDc09} and parameters.
@@ -66,7 +69,30 @@ public final class SiaDc09Servers implements SiaDc09Server {
                           final Dc09GlobalParameters globalParameters,
                           final Optional<ThreadFactory> threadPoolThreadFactory,
                           final Optional<ThreadFactory> serverThreadFactory) {
+        this(rcts, transportParameters, store, globalParameters,
+             threadPoolThreadFactory, serverThreadFactory, null);
+    }
 
+    /**
+     * Initializes a new {@code SiaDc09Servers} with given {@code RctDc09}, parameters and frame unwrapper.
+     *
+     * @param rcts                      the servers to create
+     * @param transportParameters       the server parameters to use
+     * @param store                     the DC-09 SPT store
+     * @param globalParameters          the DC-09 global parameters
+     * @param threadPoolThreadFactory   optional thread factory for the onMessage pool
+     * @param serverThreadFactory       optional thread factory for server threads
+     * @param frameUnwrapper            optional proprietary frame unwrapper (e.g. DSC binary wrapper)
+     */
+    public SiaDc09Servers(final List<RctDc09> rcts,
+                          final TransportParameters transportParameters,
+                          final Dc09SptStore store,
+                          final Dc09GlobalParameters globalParameters,
+                          final Optional<ThreadFactory> threadPoolThreadFactory,
+                          final Optional<ThreadFactory> serverThreadFactory,
+                          final FrameUnwrapper frameUnwrapper) {
+
+        this.frameUnwrapper = frameUnwrapper;
         onMessageExecutor = new ThreadPoolExecutor(
             0,
             transportParameters.getOnMessageThreads(),
@@ -77,7 +103,7 @@ public final class SiaDc09Servers implements SiaDc09Server {
         );
 
         for (RctDc09 rct : rcts) {
-            Collection<SiaDc09Server> server = buildDc09Server(rct, transportParameters, onMessageExecutor, store, globalParameters);
+            Collection<SiaDc09Server> server = buildDc09Server(rct, transportParameters, onMessageExecutor, store, globalParameters, frameUnwrapper);
             servers.addAll(server);
         }
         ThreadFactory threadFactory = serverThreadFactory.orElse(
@@ -95,19 +121,20 @@ public final class SiaDc09Servers implements SiaDc09Server {
                                                       final TransportParameters transportParameters,
                                                       final ExecutorService onMessageExecutor,
                                                       final Dc09SptStore store,
-                                                      final Dc09GlobalParameters globalParameters) {
+                                                      final Dc09GlobalParameters globalParameters,
+                                                      final FrameUnwrapper frameUnwrapper) {
 
         if (rct.getTransport() == RctDc09.Transport.BOTH) {
             return Lists.newArrayList(
-                newUdpServer(rct, transportParameters, onMessageExecutor, store, globalParameters),
-                newTcpServer(rct, transportParameters, onMessageExecutor, store, globalParameters)
+                newUdpServer(rct, transportParameters, onMessageExecutor, store, globalParameters, frameUnwrapper),
+                newTcpServer(rct, transportParameters, onMessageExecutor, store, globalParameters, frameUnwrapper)
             );
         }
 
         return Lists.newArrayList(
             rct.getTransport() == RctDc09.Transport.TCP ?
-                newTcpServer(rct, transportParameters, onMessageExecutor, store, globalParameters)
-                : newUdpServer(rct, transportParameters, onMessageExecutor, store, globalParameters)
+                newTcpServer(rct, transportParameters, onMessageExecutor, store, globalParameters, frameUnwrapper)
+                : newUdpServer(rct, transportParameters, onMessageExecutor, store, globalParameters, frameUnwrapper)
         );
 
     }
@@ -117,8 +144,9 @@ public final class SiaDc09Servers implements SiaDc09Server {
                                        final TransportParameters transportParameters,
                                        final ExecutorService onMessageExecutor,
                                        final Dc09SptStore store,
-                                       final Dc09GlobalParameters globalParameters) {
-        return new TcpSiaDc09Server(rct, transportParameters, onMessageExecutor, globalParameters, store);
+                                       final Dc09GlobalParameters globalParameters,
+                                       final FrameUnwrapper frameUnwrapper) {
+        return new TcpSiaDc09Server(rct, transportParameters, onMessageExecutor, globalParameters, store, frameUnwrapper);
     }
 
     // Creates a new UDP server.
@@ -126,8 +154,9 @@ public final class SiaDc09Servers implements SiaDc09Server {
                                        final TransportParameters transportParameters,
                                        final ExecutorService onMessageExecutor,
                                        final Dc09SptStore store,
-                                       final Dc09GlobalParameters globalParameters) {
-        return new UdpSiaDc09Server(rct, transportParameters, onMessageExecutor, globalParameters, store);
+                                       final Dc09GlobalParameters globalParameters,
+                                       final FrameUnwrapper frameUnwrapper) {
+        return new UdpSiaDc09Server(rct, transportParameters, onMessageExecutor, globalParameters, store, frameUnwrapper);
     }
 
     @Override

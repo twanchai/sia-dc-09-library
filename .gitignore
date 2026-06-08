@@ -95,3 +95,8 @@ mibs*/
 docker/openvpn-docker/bin/
 
 *.versionsBackup
+/SecureProtocol/Server/obj
+/SecureProtocol/Server/bin
+/SecureProtocol/Shared/obj
+/SecureProtocol/Shared/bin
+/SecureProtocol/Client/obj

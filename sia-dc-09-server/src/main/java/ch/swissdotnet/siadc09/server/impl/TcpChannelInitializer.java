@@ -19,6 +19,8 @@ import ch.swissdotnet.siadc09.Dc09SptStore;
 import ch.swissdotnet.siadc09.ExceptionHandler;
 import ch.swissdotnet.siadc09.TransportParameters;
 import ch.swissdotnet.siadc09.messages.versions.StandardDc09;
+import ch.swissdotnet.siadc09.net.FrameUnwrapper;
+import ch.swissdotnet.siadc09.net.FrameUnwrapperHandler;
 import ch.swissdotnet.siadc09.net.MessageDecoder;
 import ch.swissdotnet.siadc09.net.MessageEncoder;
 import ch.swissdotnet.siadc09.parameters.Dc09GlobalParameters;
@@ -73,6 +75,8 @@ public final class TcpChannelInitializer extends ChannelInitializer<SocketChanne
     private final MessageDecoder messageDecoder;
     // The DC-09 message handler.
     private final MessageHandler messageHandler;
+    // Optional pre-decoder frame unwrapper (e.g. DSC binary wrapper).
+    private final FrameUnwrapperHandler frameUnwrapperHandler;
 
     /**
      * Initializes a new {@code TcpChannelInitializer} with given parameters.
@@ -91,7 +95,8 @@ public final class TcpChannelInitializer extends ChannelInitializer<SocketChanne
                                  final TransportParameters transportParameters,
                                  final ExecutorService onMessageExecutor,
                                  final Set<ServerMessageListener> listeners,
-                                 final ChannelManager channelManager) {
+                                 final ChannelManager channelManager,
+                                 final FrameUnwrapper frameUnwrapper) {
         this.transportParameters = transportParameters;
         this.channelManager = channelManager;
         Dc09Handler handler = new Dc09Handler();
@@ -100,6 +105,7 @@ public final class TcpChannelInitializer extends ChannelInitializer<SocketChanne
         messageEncoder = new MessageEncoder(handler, globalParameters);
         messageDecoder = new MessageDecoder(handler, globalParameters, store);
         messageHandler = new MessageHandler(store, rct, onMessageExecutor, listeners, Dc09Channel.TcpChannel::new);
+        frameUnwrapperHandler = frameUnwrapper != null ? new FrameUnwrapperHandler(frameUnwrapper) : null;
     }
 
     @Override
@@ -115,6 +121,10 @@ public final class TcpChannelInitializer extends ChannelInitializer<SocketChanne
 
         if (transportParameters.isLogBytes()) {
             pipeline.addLast(BYTE_LOGGER, channelManager.getByteInterceptor());
+        }
+
+        if (frameUnwrapperHandler != null) {
+            pipeline.addLast(FRAME_UNWRAPPER, frameUnwrapperHandler);
         }
 
         pipeline.addLast(BYTE_ENCODER, messageEncoder)

@@ -15,6 +15,7 @@
 package ch.swissdotnet.siadc09.server.impl;
 
 import ch.swissdotnet.siadc09.Dc09SptStore;
+import ch.swissdotnet.siadc09.net.FrameUnwrapper;
 import ch.swissdotnet.siadc09.TransportParameters;
 import ch.swissdotnet.siadc09.log.ByteInterceptor;
 import ch.swissdotnet.siadc09.log.MessageInterceptor;
@@ -71,6 +72,25 @@ public final class UdpSiaDc09Server extends AbstractServer {
                             final ExecutorService onMessageExecutor,
                             final Dc09GlobalParameters globalParameters,
                             final Dc09SptStore store) {
+        this(rct, transportParameters, onMessageExecutor, globalParameters, store, null);
+    }
+
+    /**
+     * Initializes a new {@code UdpSiaDc09Server} with given parameters and frame unwrapper.
+     *
+     * @param rct                 the server representation as RCT
+     * @param transportParameters the server parameters
+     * @param onMessageExecutor   the onMessage executor
+     * @param globalParameters    the DC-09 global parameters
+     * @param store               the DC-09 SPT store
+     * @param frameUnwrapper      optional proprietary frame unwrapper (e.g. DSC binary wrapper)
+     */
+    public UdpSiaDc09Server(final RctDc09 rct,
+                            final TransportParameters transportParameters,
+                            final ExecutorService onMessageExecutor,
+                            final Dc09GlobalParameters globalParameters,
+                            final Dc09SptStore store,
+                            final FrameUnwrapper frameUnwrapper) {
         super(rct, transportParameters, onMessageExecutor);
         this.byteInterceptor = new ByteInterceptor(listeners);
         this.messageInterceptor = new MessageInterceptor(store, listeners);
@@ -83,7 +103,8 @@ public final class UdpSiaDc09Server extends AbstractServer {
             this.onMessageExecutor,
             listeners,
             byteInterceptor,
-            messageInterceptor
+            messageInterceptor,
+            frameUnwrapper
         );
     }
 

@@ -60,16 +60,22 @@ public class BothTcpUdpServerTestManual {
 
         Dc09GlobalParameters globalParameters = new Dc09GlobalParameters();
 
+        // DSC TL-series binary wrapper decoder.
+        // Uses default all-zero AES key (00000000000000000000000000000000) unless overridden.
+        // Set skipCrcValidation=true if you want to test without confirming CRC byte order.
+        DscFrameDecoder dscDecoder = new DscFrameDecoder();
+
         SiaDc09Servers servers = new SiaDc09Servers(
             Lists.newArrayList(
-                RctDc09.newRctDc09("0.0.0.0", 3061, RctDc09.Transport.BOTH).build(),
-                RctDc09.newRctDc09("0.0.0.0", 3062, RctDc09.Transport.BOTH).build()
+                RctDc09.newRctDc09("0.0.0.0", 50005, RctDc09.Transport.BOTH).build(),
+                RctDc09.newRctDc09("0.0.0.0", 50006, RctDc09.Transport.BOTH).build()
             ),
             new TransportParameters().setLogMessages(true),
             store,
             new Dc09GlobalParameters(),
             Optional.empty(),
-            Optional.empty()
+            Optional.empty(),
+            dscDecoder
         );
 
         servers.addMessageListener(
@@ -168,8 +174,8 @@ public class BothTcpUdpServerTestManual {
         System.out.println("╔════════════════════════════════════════════════════╗");
         System.out.println("║   SIA DC-09 Server  —  BothTcpUdp Mode            ║");
         System.out.println("╠════════════════════════════════════════════════════╣");
-        System.out.println("║  Listening on  0.0.0.0:3061   (TCP+UDP)           ║");
-        System.out.println("║  Listening on  0.0.0.0:3062   (TCP+UDP)           ║");
+        System.out.println("║  Listening on  0.0.0.0:50005   (TCP+UDP)           ║");
+        System.out.println("║  Listening on  0.0.0.0:50006   (TCP+UDP)           ║");
         System.out.println("║  Account       080027E62A64                        ║");
         System.out.println("║  Cipher        AES-CBC                             ║");
         System.out.printf( "║  File logging  %-35s║%n", fileLog);

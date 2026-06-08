@@ -9,8 +9,8 @@ to the remote Linux host `wanchai-j1900`.
 
 | Script | Server class | Remote directory | Ports |
 |---|---|---|---|
-| `deploy-udp-server.sh` | `UdpServerTestManual` | `/home/wanchai/sia-dc-09-udp-server` | UDP 3061 |
-| `deploy-both-server.sh` | `BothTcpUdpServerTestManual` | `/home/wanchai/sia-dc-09-both-server` | TCP+UDP 3061, TCP+UDP 3062 |
+| `deploy-udp-server.sh` | `UdpServerTestManual` | `/home/wanchai/sia-dc-09-udp-server` | UDP 50005 |
+| `deploy-both-server.sh` | `BothTcpUdpServerTestManual` | `/home/wanchai/sia-dc-09-both-server` | TCP+UDP 50005, TCP+UDP 50006 |
 
 Both scripts share common logic in `_deploy-lib.sh`.
 
@@ -44,9 +44,9 @@ Open the **Run and Debug** panel and select a launch configuration:
 
 | Configuration | Description |
 |---|---|
-| `UdpServerTestManual` | UDP server on port 3061 |
-| `TcpServerTestManual` | TCP server on port 3061 |
-| `BothTcpUdpServerTestManual` | TCP+UDP on ports 3061 and 3062 |
+| `UdpServerTestManual` | UDP server on port 50005 |
+| `TcpServerTestManual` | TCP server on port 50005 |
+| `BothTcpUdpServerTestManual` | TCP+UDP on ports 50005 and 50006 |
 | `ManualUdpClientTest` | Test UDP client |
 
 All configurations use JDK 25 at
@@ -94,7 +94,7 @@ ssh wanchai-j1900 'tail -f ~/sia-dc-09-udp.log'
 
 **Verify:**
 ```bash
-ssh wanchai-j1900 'ss -ulnp | grep 3061'
+ssh wanchai-j1900 'ss -ulnp | grep 50005'
 ```
 
 **Stop:**
@@ -128,15 +128,15 @@ ssh wanchai-j1900 'tail -f ~/sia-dc-09-both.log'
 
 **Verify:**
 ```bash
-ssh wanchai-j1900 'ss -tlnp; ss -ulnp' | grep -E '3061|3062'
+ssh wanchai-j1900 'ss -tlnp; ss -ulnp' | grep -E '50005|50006'
 ```
 
 Expected output (4 lines — TCP and UDP for each port):
 ```
-LISTEN  *:3061   ...  ("java",pid=<PID>...)
-LISTEN  *:3062   ...  ("java",pid=<PID>...)
-UNCONN  *:3061   ...  ("java",pid=<PID>...)
-UNCONN  *:3062   ...  ("java",pid=<PID>...)
+LISTEN  *:50005   ...  ("java",pid=<PID>...)
+LISTEN  *:50006   ...  ("java",pid=<PID>...)
+UNCONN  *:50005   ...  ("java",pid=<PID>...)
+UNCONN  *:50006   ...  ("java",pid=<PID>...)
 ```
 
 **Stop:**

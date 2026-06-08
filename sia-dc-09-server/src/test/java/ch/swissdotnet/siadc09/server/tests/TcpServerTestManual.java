@@ -59,7 +59,7 @@ public class TcpServerTestManual {
             new SiaDc09Servers.SiaThreadFactory("SIA-DC-09-onMessage")
         );
         SiaDc09Server server = new TcpSiaDc09Server(
-            RctDc09.newRctDc09("0.0.0.0", 3061, RctDc09.Transport.TCP).build(),
+            RctDc09.newRctDc09("0.0.0.0", 50005, RctDc09.Transport.TCP).build(),
             new TransportParameters(),
             onMessageExecutor,
             new Dc09GlobalParameters(),

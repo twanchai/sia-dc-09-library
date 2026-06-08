@@ -81,6 +81,10 @@ public final class ChannelUtilities {
      * Message IN/OUT handler.
      */
     public static final String MESSAGE_LOGGER = "messageLogger";
+    /**
+     * Frame unwrapper handler (optional, sits just before the byte decoder).
+     */
+    public static final String FRAME_UNWRAPPER = "frameUnwrapper";
 
 
     /**

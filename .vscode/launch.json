@@ -1,7 +1,4 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
@@ -47,6 +44,11 @@
             "mainClass": "ch.swissdotnet.siadc09.server.tests.UdpServerTestManual",
             "projectName": "sia-dc-09-server",
             "javaExec": "/Users/wanchai/.jdk/jdk-25.0.2/jdk-25.0.2+10/Contents/Home/bin/java"
+        },
+        {
+            "name": "C#: Launch Startup Project",
+            "type": "dotnet",
+            "request": "launch"
         }
     ]
 }

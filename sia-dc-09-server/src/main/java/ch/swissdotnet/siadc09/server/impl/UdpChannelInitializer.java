@@ -20,6 +20,8 @@ import ch.swissdotnet.siadc09.ExceptionHandler;
 import ch.swissdotnet.siadc09.TransportParameters;
 import ch.swissdotnet.siadc09.log.ByteInterceptor;
 import ch.swissdotnet.siadc09.log.MessageInterceptor;
+import ch.swissdotnet.siadc09.net.FrameUnwrapper;
+import ch.swissdotnet.siadc09.net.FrameUnwrapperHandler;
 import ch.swissdotnet.siadc09.net.MessageDecoder;
 import ch.swissdotnet.siadc09.net.MessageEncoder;
 import ch.swissdotnet.siadc09.parameters.Dc09GlobalParameters;
@@ -75,6 +77,8 @@ public final class UdpChannelInitializer extends ChannelInitializer<DatagramChan
     private final MessageDecoder messageDecoder;
     // The DC-09 message handler.
     private final MessageHandler messageHandler;
+    // Optional pre-decoder frame unwrapper (e.g. DSC binary wrapper).
+    private final FrameUnwrapperHandler frameUnwrapperHandler;
 
     /**
      * Initializes a new {@code UdpChannelInitializer} with given parameters.
@@ -95,7 +99,8 @@ public final class UdpChannelInitializer extends ChannelInitializer<DatagramChan
                                  final ExecutorService onMessageExecutor,
                                  final Set<ServerMessageListener> listeners,
                                  final ByteInterceptor byteInterceptor,
-                                 final MessageInterceptor messageInterceptor) {
+                                 final MessageInterceptor messageInterceptor,
+                                 final FrameUnwrapper frameUnwrapper) {
         this.transportParameters = transportParameters;
         this.byteInterceptor = byteInterceptor;
         this.messageInterceptor = messageInterceptor;
@@ -106,6 +111,7 @@ public final class UdpChannelInitializer extends ChannelInitializer<DatagramChan
         messageEncoder = new MessageEncoder(handler, globalParameters);
         messageDecoder = new MessageDecoder(handler, globalParameters, store);
         messageHandler = new MessageHandler(store, rct, onMessageExecutor, listeners, Dc09Channel.UdpChannel::new);
+        frameUnwrapperHandler = frameUnwrapper != null ? new FrameUnwrapperHandler(frameUnwrapper) : null;
     }
 
     @Override
@@ -120,6 +126,10 @@ public final class UdpChannelInitializer extends ChannelInitializer<DatagramChan
 
         if (transportParameters.isLogBytes()) {
             pipeline.addLast(BYTE_LOGGER, byteInterceptor);
+        }
+
+        if (frameUnwrapperHandler != null) {
+            pipeline.addLast(FRAME_UNWRAPPER, frameUnwrapperHandler);
         }
 
         pipeline.addLast(BYTE_ENCODER, messageEncoder)
