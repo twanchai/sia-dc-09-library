@@ -7,16 +7,18 @@ using System.Threading.Tasks;
 namespace SecureProtocol
 {
     /// <summary>
-    /// TCP Client — สร้าง, encrypt, sign และส่ง SecurePacket
-    /// รองรับ tamper mode สำหรับ test
+    /// TCP Client — ส่งได้ 2 format:
+    ///   1. SecurePacket  — AES-256-GCM + HMAC-SHA256 (custom protocol)
+    ///   2. DSC binary    — AES-128-CBC + CRC32 (simulates DSC TL-series device)
     /// </summary>
     public class SecureSender
     {
-        private readonly string _host;
-        private readonly int    _port;
-        private readonly byte[] _hmacKey;
-        private readonly byte[] _aesKey;
+        private readonly string  _host;
+        private readonly int     _port;
+        private readonly byte[]  _hmacKey;
+        private readonly byte[]  _aesKey;
         private uint _seq = 0;
+        private ushort _dscSeq = 0;
 
         public event Action<string>? OnLog;
 
@@ -28,28 +30,81 @@ namespace SecureProtocol
             _aesKey  = aesKey;
         }
 
-        /// <summary>
-        /// ส่ง message ปกติ
-        /// </summary>
-        public async Task<string> SendAsync(string message, PacketType type = PacketType.Data, CancellationToken ct = default)
-            => await InternalSendAsync(Encoding.UTF8.GetBytes(message), type, tamper: false, replaySeq: null, ct);
+        // ── SecurePacket methods ─────────────────────────────────────────────────
+
+        /// <summary>ส่ง SecurePacket ปกติ</summary>
+        public Task<string> SendAsync(string message, PacketType type = PacketType.Data,
+                                      CancellationToken ct = default)
+            => InternalSendAsync(Encoding.UTF8.GetBytes(message), type,
+                                 tamper: false, replaySeq: null, ct);
+
+        /// <summary>ส่ง SecurePacket ที่ถูก tamper — test HMAC/GCM rejection</summary>
+        public Task<string> SendTamperedAsync(string message, CancellationToken ct = default)
+            => InternalSendAsync(Encoding.UTF8.GetBytes(message), PacketType.Data,
+                                 tamper: true, replaySeq: null, ct);
+
+        /// <summary>ส่ง SecurePacket ด้วย seq เก่า — test replay protection</summary>
+        public Task<string> SendReplayAsync(string message, uint replaySeq,
+                                            CancellationToken ct = default)
+            => InternalSendAsync(Encoding.UTF8.GetBytes(message), PacketType.Data,
+                                 tamper: false, replaySeq: replaySeq, ct);
+
+        // ── DSC TL-series binary methods ─────────────────────────────────────────
 
         /// <summary>
-        /// ส่ง packet ที่ถูก tamper (flip 1 byte ใน payload) — ใช้ test HMAC/GCM rejection
+        /// Simulate DSC TL-series device — ส่ง SIA payload ครอบด้วย DSC binary envelope.
+        /// <param name="siaPayload">SIA DC-09 ASCII string (max 16 bytes — 1 AES block)</param>
+        /// <param name="dscAes128Key">16-byte AES-128 key ที่ตรงกับ server</param>
+        /// <param name="accountHash">3-byte account hash (optional, zeros if null)</param>
         /// </summary>
-        public async Task<string> SendTamperedAsync(string message, CancellationToken ct = default)
-            => await InternalSendAsync(Encoding.UTF8.GetBytes(message), PacketType.Data, tamper: true, replaySeq: null, ct);
+        public async Task<string> SendDscAsync(string siaPayload, byte[] dscAes128Key,
+                                               byte[]? accountHash = null,
+                                               CancellationToken ct = default)
+        {
+            var payloadBytes = Encoding.ASCII.GetBytes(siaPayload);
+            var acctHash     = accountHash ?? new byte[3];
+            var seq          = ++_dscSeq;
+
+            var frame = DscEnvelope.Build(payloadBytes, dscAes128Key, seq, acctHash);
+
+            Log($"[Client/DSC] Sending seq={seq} payload=\"{siaPayload}\" ({frame.Length} bytes)");
+            return await RawSendAsync(frame, ct);
+        }
 
         /// <summary>
-        /// ส่ง packet ซ้ำด้วย sequence number เก่า — ใช้ test replay protection
+        /// ส่ง DSC frame ที่ CRC ถูก corrupt — test server-side CRC32 rejection.
         /// </summary>
-        public async Task<string> SendReplayAsync(string message, uint replaySeq, CancellationToken ct = default)
-            => await InternalSendAsync(Encoding.UTF8.GetBytes(message), PacketType.Data, tamper: false, replaySeq: replaySeq, ct);
+        public async Task<string> SendDscTamperedCrcAsync(string siaPayload, byte[] dscAes128Key,
+                                                          CancellationToken ct = default)
+        {
+            var frame = DscEnvelope.Build(Encoding.ASCII.GetBytes(siaPayload),
+                                          dscAes128Key, ++_dscSeq, new byte[3]);
+            frame[24] ^= 0xFF;  // corrupt CRC byte
+            Log($"[Client/DSC] Sending TAMPERED CRC frame ({frame.Length} bytes)");
+            return await RawSendAsync(frame, ct);
+        }
 
-        private async Task<string> InternalSendAsync(byte[] payload, PacketType type, bool tamper, uint? replaySeq, CancellationToken ct)
+        /// <summary>
+        /// ส่ง DSC frame encrypted ด้วย wrong key — test server-side decrypt failure.
+        /// </summary>
+        public async Task<string> SendDscWrongKeyAsync(string siaPayload, byte[] dscAes128Key,
+                                                       CancellationToken ct = default)
+        {
+            var wrongKey = new byte[16];
+            new Random().NextBytes(wrongKey);
+            var frame = DscEnvelope.Build(Encoding.ASCII.GetBytes(siaPayload),
+                                          wrongKey, ++_dscSeq, new byte[3]);
+            Log($"[Client/DSC] Sending frame with WRONG KEY ({frame.Length} bytes)");
+            return await RawSendAsync(frame, ct);
+        }
+
+        // ── Internals ────────────────────────────────────────────────────────────
+
+        private async Task<string> InternalSendAsync(byte[] payload, PacketType type,
+                                                      bool tamper, uint? replaySeq,
+                                                      CancellationToken ct)
         {
             var (cipherWithTag, nonce) = CryptoHelper.Encrypt(payload, _aesKey);
-
             uint seq = replaySeq ?? ++_seq;
 
             var pkt = new SecurePacket
@@ -61,29 +116,28 @@ namespace SecureProtocol
                 AesNonce         = nonce
             };
 
-            // Sign
-            var signable = pkt.GetSignableBytes();
-            pkt.Hmac = CryptoHelper.Sign(signable, _hmacKey);
+            pkt.Hmac = CryptoHelper.Sign(pkt.GetSignableBytes(), _hmacKey);
 
-            // Tamper: flip byte หลัง sign
             if (tamper && pkt.EncryptedPayload.Length > 0)
                 pkt.EncryptedPayload[0] ^= 0xFF;
 
             var rawPkt = pkt.Serialize();
-
-            // Frame: [4-byte length][packet bytes]
+            // SecurePacket frame: [4-byte LE length][packet bytes]
             var frame = new byte[4 + rawPkt.Length];
             BitConverter.GetBytes(rawPkt.Length).CopyTo(frame, 0);
             rawPkt.CopyTo(frame, 4);
 
+            Log($"[Client] Sent seq={seq} type={type} tamper={tamper} replay={replaySeq.HasValue}");
+            return await RawSendAsync(frame, ct);
+        }
+
+        /// <summary>Open TCP, send raw frame bytes, read ACK, close.</summary>
+        private async Task<string> RawSendAsync(byte[] frame, CancellationToken ct)
+        {
             using var tcp = new TcpClient();
             await tcp.ConnectAsync(_host, _port, ct);
             await using var stream = tcp.GetStream();
             await stream.WriteAsync(frame, ct);
-
-            Log($"[Client] Sent seq={seq} type={type} tamper={tamper} replay={replaySeq.HasValue}");
-
-            // Read ACK
             return await ReadAckAsync(stream, ct);
         }
 
