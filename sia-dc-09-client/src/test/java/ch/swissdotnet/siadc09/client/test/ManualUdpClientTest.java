@@ -21,6 +21,7 @@ import ch.swissdotnet.siadc09.client.TniDc09;
 import ch.swissdotnet.siadc09.client.TniDc09Client;
 import ch.swissdotnet.siadc09.exceptions.Dc09Exception;
 import ch.swissdotnet.siadc09.exceptions.InvalidCipheringException;
+import ch.swissdotnet.siadc09.messages.DataMessage;
 import ch.swissdotnet.siadc09.messages.Message;
 import ch.swissdotnet.siadc09.messages.encryption.AesCbcCipherAlgorithm;
 import ch.swissdotnet.siadc09.parameters.Dc09Spt;
@@ -58,7 +59,7 @@ public class ManualUdpClientTest {
         byte[] hexKey = Dc09Utils.hexStringToBytes("ABCDABCDABCDABCDABCDABCDABCDABCD");
         Dc09Spt spt1 = Dc09Spt.newSptBuilder("080027E62A64", new Dc09SptParameters(new AesCbcCipherAlgorithm(hexKey))).build();
 
-        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts("wanchai-j1900", 33200))
+        TniDc09 tni = TniDc09.newUdpAtp(HostAndPort.fromParts("wanchai-j1900", 3061))
             .withTimeoutInSeconds(5)
             .build();
 
@@ -69,6 +70,7 @@ public class ManualUdpClientTest {
         ClientResponseListener listener = new MyClientResponseListener();
         TniDc09Client client1 = tni.sender(listener).get();
 
+        printMenu();
         Scanner scanner = new Scanner(System.in);
         String line;
         while ((line = scanner.nextLine()) != null) {
@@ -76,45 +78,98 @@ public class ManualUdpClientTest {
                 case "1" -> {
                     builder1.timestamp(DateTime.now(DateTimeZone.UTC));
                     client1.send(spt1, builder1);
+                    LOG.info("→ Sent NYS0021 (alarm event)");
                 }
                 case "2" -> {
                     builder2.timestamp(DateTime.now(DateTimeZone.UTC));
                     client1.send(spt1, builder2);
+                    LOG.info("→ Sent NYK0021 (keypad event)");
                 }
                 case "3" -> {
                     builder3.timestamp(DateTime.now(DateTimeZone.UTC));
                     client1.send(spt1, builder3);
+                    LOG.info("→ Sent NFA0002 (fire alarm)");
                 }
                 case "q" -> {
                     LOG.info("Quit");
                     System.exit(0);
                 }
-                default -> LOG.info("No.");
+                default -> {
+                    LOG.info("Unknown command: '{}'", line);
+                    printMenu();
+                }
             }
         }
+    }
+
+    private static void printMenu() {
+        System.out.println();
+        System.out.println("┌─────────────────────────────────────────┐");
+        System.out.println("│  SIA DC-09 Manual Client                │");
+        System.out.println("│  Target: wanchai-j1900:3061  (UDP)      │");
+        System.out.println("├─────────────────────────────────────────┤");
+        System.out.println("│  1 → Send NYS0021 (alarm event)         │");
+        System.out.println("│  2 → Send NYK0021 (keypad event)        │");
+        System.out.println("│  3 → Send NFA0002 (fire alarm)          │");
+        System.out.println("│  q → Quit                               │");
+        System.out.println("└─────────────────────────────────────────┘");
+        System.out.print("Enter command: ");
+    }
+
+    private static void printMessage(final String label, final Message msg) {
+        String type    = msg.type() != null ? msg.type().name() : "?";
+        String account = msg.getAccountNumber();
+        String seq     = String.valueOf(msg.getSequence());
+        String time    = msg.getTimestamp().map(Object::toString).orElse("—");
+        String id      = msg.getId() != null ? msg.getId() : "—";
+        String data    = (msg instanceof DataMessage dm) ? dm.getData() : "—";
+
+        System.out.println();
+        System.out.println("┌─────────────────────────────────────────┐");
+        System.out.printf( "│  %-41s│%n", label);
+        System.out.println("├─────────────────────────────────────────┤");
+        System.out.printf( "│  Type    : %-30s│%n", type);
+        System.out.printf( "│  Account : %-30s│%n", account);
+        System.out.printf( "│  Seq     : %-30s│%n", seq);
+        System.out.printf( "│  ID      : %-30s│%n", id);
+        System.out.printf( "│  Data    : %-30s│%n", data);
+        System.out.printf( "│  Time    : %-30s│%n", time);
+        System.out.println("└─────────────────────────────────────────┘");
+        System.out.print("Enter command: ");
     }
 
     private static class MyClientResponseListener implements ClientResponseListener {
 
         @Override
         public void onResponse(final Message response, final Message message) {
-            System.out.println(response);
+            printMessage("SERVER RESPONSE", response);
         }
 
         @Override
         public void onDisconnect(final TniDc09 tni) {
-            System.out.println("Timeout");
+            System.out.println();
+            System.out.println("┌─────────────────────────────────────────┐");
+            System.out.println("│  ⚠  DISCONNECTED (server closed)        │");
+            System.out.println("└─────────────────────────────────────────┘");
         }
 
         @Override
         public void onMessageTimeout(final Message message) {
-            System.out.println("Timeout");
+            System.out.println();
+            System.out.println("┌─────────────────────────────────────────┐");
+            System.out.printf( "│  ⚠  TIMEOUT — no reply for seq %-8s│%n", message.getSequence());
+            System.out.println("└─────────────────────────────────────────┘");
+            System.out.print("Enter command: ");
         }
 
         @Override
         public void onError(final Dc09Exception exception,
                             final RemoteAddressResolver address) {
-
+            System.out.println();
+            System.out.println("┌─────────────────────────────────────────┐");
+            System.out.printf( "│  ✗  ERROR: %-30s│%n", exception.getMessage());
+            System.out.println("└─────────────────────────────────────────┘");
+            System.out.print("Enter command: ");
         }
 
         @Override
@@ -122,7 +177,6 @@ public class ManualUdpClientTest {
                               final RemoteAddressResolver address,
                               final Optional<Dc09Spt> sptDc09,
                               final Direction direction) {
-
         }
 
         @Override
@@ -131,7 +185,7 @@ public class ManualUdpClientTest {
                                  final Optional<Dc09Spt> sptDc09,
                                  final Direction direction) {
             if (direction == Direction.INCOMING) {
-                System.out.println(message);
+                printMessage("← INCOMING from " + address.getHost() + ":" + address.getPort(), message);
             }
         }
     }

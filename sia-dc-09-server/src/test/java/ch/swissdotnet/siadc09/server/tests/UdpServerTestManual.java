@@ -58,7 +58,7 @@ public class UdpServerTestManual {
             new SiaDc09Servers.SiaThreadFactory("SIA-DC-09-onMessage")
         );
         UdpSiaDc09Server server = new UdpSiaDc09Server(
-            RctDc09.newRctDc09("0.0.0.0", 33200, RctDc09.Transport.UDP).build(),
+            RctDc09.newRctDc09("0.0.0.0", 3061, RctDc09.Transport.UDP).build(),
             new TransportParameters(),
             onMessageExecutor,
             new Dc09GlobalParameters(),

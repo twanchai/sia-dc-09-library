@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy UdpServerTestManual to wanchai-j1900 (UDP port 33200).
+# Deploy UdpServerTestManual to wanchai-j1900 (UDP port 3061).
 # Usage: ./deploy-udp-server.sh [--run]
 
 set -euo pipefail
@@ -17,7 +17,7 @@ deploy_connect
 deploy_build
 deploy_collect_deps
 deploy_ensure_jdk
-deploy_stop   33200
+deploy_stop   3061
 deploy_stage  "$MAIN_CLASS"
 deploy_rsync  "$REMOTE_DIR"
 

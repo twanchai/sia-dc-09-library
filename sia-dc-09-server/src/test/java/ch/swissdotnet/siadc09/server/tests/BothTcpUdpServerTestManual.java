@@ -19,6 +19,7 @@ import ch.swissdotnet.siadc09.RemoteAddressResolver;
 import ch.swissdotnet.siadc09.TransportParameters;
 import ch.swissdotnet.siadc09.exceptions.Dc09Exception;
 import ch.swissdotnet.siadc09.exceptions.InvalidCipheringException;
+import ch.swissdotnet.siadc09.messages.DataMessage;
 import ch.swissdotnet.siadc09.messages.Event;
 import ch.swissdotnet.siadc09.messages.Message;
 import ch.swissdotnet.siadc09.messages.Polling;
@@ -49,6 +50,9 @@ public class BothTcpUdpServerTestManual {
     }
 
     public void fireUpServer() throws IOException, InterruptedException, InvalidCipheringException {
+        IncomingMessageLogger msgLogger = IncomingMessageLogger.fromConfig();
+        msgLogger.open();
+
         Dc09TestSptStore store = new Dc09TestSptStore();
         byte[] hexKey = Dc09Utils.hexStringToBytes("ABCDABCDABCDABCDABCDABCDABCDABCD");
         Dc09Spt spt = Dc09Spt.newSptBuilder("080027E62A64", new Dc09SptParameters(new AesCbcCipherAlgorithm(hexKey))).build();
@@ -58,8 +62,8 @@ public class BothTcpUdpServerTestManual {
 
         SiaDc09Servers servers = new SiaDc09Servers(
             Lists.newArrayList(
-                RctDc09.newRctDc09("0.0.0.0", 33200, RctDc09.Transport.BOTH).build(),
-                RctDc09.newRctDc09("0.0.0.0", 33201, RctDc09.Transport.BOTH).build()
+                RctDc09.newRctDc09("0.0.0.0", 3061, RctDc09.Transport.BOTH).build(),
+                RctDc09.newRctDc09("0.0.0.0", 3062, RctDc09.Transport.BOTH).build()
             ),
             new TransportParameters().setLogMessages(true),
             store,
@@ -78,7 +82,7 @@ public class BothTcpUdpServerTestManual {
                                       final RemoteAddressResolver address,
                                       final Message.Builder response,
                                       final ServerResponseListener responseListener) {
-                    System.out.println(polling);
+                    printMessage("POLL  from " + address.getHost() + ":" + address.getPort(), polling);
                 }
 
                 @Override
@@ -88,7 +92,7 @@ public class BothTcpUdpServerTestManual {
                                     final RemoteAddressResolver address,
                                     final Message.Builder response,
                                     final ServerResponseListener responseListener) {
-                    System.out.println(event);
+                    printMessage("EVENT from " + address.getHost() + ":" + address.getPort(), event);
                     responseListener.response(response.build());
                 }
 
@@ -96,14 +100,14 @@ public class BothTcpUdpServerTestManual {
                 public void onError(final String error,
                                     final RemoteAddressResolver address,
                                     final Message message) {
-
+                    printError(error, address.getHost() + ":" + address.getPort());
                 }
 
                 @Override
                 public void onError(final String error,
                                     final RemoteAddressResolver address,
                                     final Dc09Exception exception) {
-
+                    printError(error + " — " + exception.getMessage(), address.getHost() + ":" + address.getPort());
                 }
 
             }
@@ -114,6 +118,11 @@ public class BothTcpUdpServerTestManual {
                                       final Optional<Dc09Spt> sptDc09,
                                       final Direction direction) {
                     super.onByteLog(message, address, sptDc09, direction);
+                    if (direction == Direction.INCOMING) {
+                        msgLogger.log(
+                            address.getHost() + ":" + address.getPort(),
+                            Dc09Utils.bytesToAsciiString(message));
+                    }
                 }
 
                 @Override
@@ -122,7 +131,8 @@ public class BothTcpUdpServerTestManual {
                                          final Optional<Dc09Spt> sptDc09,
                                          final Direction direction) {
                     super.onMessageLog(message, address, sptDc09, direction);
-                    LOG.info("{} from {} with {}.", direction, address, message);
+                    String arrow = direction == Direction.INCOMING ? "→ IN " : "← OUT";
+                    printMessage(arrow + "  " + address.getHost() + ":" + address.getPort(), message);
                 }
             }
         );
@@ -131,21 +141,83 @@ public class BothTcpUdpServerTestManual {
 
         thread.start();
 
+        printBanner(msgLogger.isEnabled());
+
         int read = System.in.read();
-        System.out.println(read);
-
         servers.setLogBytes(true).setLogMessages(true);
+        msgLogger.setEnabled(true);
+        System.out.println("  [byte+message logging ON, file logging ON — Enter again to disable]");
 
         read = System.in.read();
-        System.out.println(read);
-
         servers.setLogBytes(false).setLogMessages(false);
+        msgLogger.setEnabled(false);
+        System.out.println("  [logging OFF — Enter again to stop server]");
 
         read = System.in.read();
-        System.out.println(read);
-
+        msgLogger.close();
         servers.close();
 
         thread.join();
+    }
+
+    // ── Pretty-print helpers ──────────────────────────────────────────────────
+
+    private static void printBanner(final boolean fileLogEnabled) {
+        String fileLog = fileLogEnabled ? "ON  (incoming-messages.log)" : "OFF (see server-log.properties)";
+        System.out.println();
+        System.out.println("╔════════════════════════════════════════════════════╗");
+        System.out.println("║   SIA DC-09 Server  —  BothTcpUdp Mode            ║");
+        System.out.println("╠════════════════════════════════════════════════════╣");
+        System.out.println("║  Listening on  0.0.0.0:3061   (TCP+UDP)           ║");
+        System.out.println("║  Listening on  0.0.0.0:3062   (TCP+UDP)           ║");
+        System.out.println("║  Account       080027E62A64                        ║");
+        System.out.println("║  Cipher        AES-CBC                             ║");
+        System.out.printf( "║  File logging  %-35s║%n", fileLog);
+        System.out.println("╠════════════════════════════════════════════════════╣");
+        System.out.println("║  Enter #1 → enable logging + file logging          ║");
+        System.out.println("║  Enter #2 → disable logging + file logging         ║");
+        System.out.println("║  Enter #3 → stop server                            ║");
+        System.out.println("╚════════════════════════════════════════════════════╝");
+        System.out.println();
+    }
+
+    private static void printMessage(final String label, final Message msg) {
+        String type    = msg.type() != null ? msg.type().name() : "?";
+        String account = msg.getAccountNumber();
+        String seq     = String.valueOf(msg.getSequence());
+        String cipher  = msg.isCiphered() ? "yes" : "no";
+        String time    = msg.getTimestamp().map(Object::toString).orElse("—");
+        String id      = msg.getId() != null ? msg.getId() : "—";
+        String data    = (msg instanceof DataMessage dm) ? dm.getData() : "—";
+        String ts      = java.time.LocalTime.now().toString().substring(0, 12);
+
+        System.out.println();
+        System.out.println("┌─────────────────────────────────────────────────┐");
+        System.out.printf( "│  [%s]  %-34s│%n", ts, label);
+        System.out.println("├─────────────────────────────────────────────────┤");
+        System.out.printf( "│  Type    : %-36s│%n", type);
+        System.out.printf( "│  Account : %-36s│%n", account);
+        System.out.printf( "│  Seq     : %-36s│%n", seq);
+        System.out.printf( "│  ID      : %-36s│%n", id);
+        System.out.printf( "│  Data    : %-36s│%n", data);
+        System.out.printf( "│  Ciphered: %-36s│%n", cipher);
+        System.out.printf( "│  MsgTime : %-36s│%n", time);
+        System.out.println("└─────────────────────────────────────────────────┘");
+    }
+
+    private static void printError(final String error, final String address) {
+        String ts = java.time.LocalTime.now().toString().substring(0, 12);
+        System.out.println();
+        System.out.println("┌─────────────────────────────────────────────────┐");
+        System.out.printf( "│  [%s]  ✗ ERROR from %-26s│%n", ts, address);
+        System.out.println("├─────────────────────────────────────────────────┤");
+        // wrap error text at 47 chars per line
+        String remaining = error;
+        while (!remaining.isEmpty()) {
+            String chunk = remaining.length() > 47 ? remaining.substring(0, 47) : remaining;
+            System.out.printf("│  %-47s│%n", chunk);
+            remaining = remaining.length() > 47 ? remaining.substring(47) : "";
+        }
+        System.out.println("└─────────────────────────────────────────────────┘");
     }
 }

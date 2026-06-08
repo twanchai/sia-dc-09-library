@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy BothTcpUdpServerTestManual to wanchai-j1900 (TCP+UDP ports 33200 & 33201).
+# Deploy BothTcpUdpServerTestManual to wanchai-j1900 (TCP+UDP ports 3061 & 3062).
 # Usage: ./deploy-both-server.sh [--run]
 
 set -euo pipefail
@@ -17,7 +17,7 @@ deploy_connect
 deploy_build
 deploy_collect_deps
 deploy_ensure_jdk
-deploy_stop   33200 33201
+deploy_stop   3061 3062
 deploy_stage  "$MAIN_CLASS"
 deploy_rsync  "$REMOTE_DIR"
 
