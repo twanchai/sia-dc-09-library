@@ -104,6 +104,7 @@ namespace SecureProtocol
 
         /// <summary>
         /// Create a DSC frame wrapping <paramref name="siaPayload"/> (must be ≤ 16 bytes, zero-padded to block).
+        /// If <paramref name="aes128Key"/> is all zeros, the payload is sent as plaintext (AES not configured).
         /// </summary>
         public static byte[] Build(byte[] siaPayload, byte[] aes128Key,
                                    ushort sequence, byte[] accountHash,
@@ -117,15 +118,24 @@ namespace SecureProtocol
             Buffer.BlockCopy(siaPayload, 0, padded, 0,
                 Math.Min(siaPayload.Length, PayloadLength));
 
-            // AES-128-CBC encrypt
-            using var aes = Aes.Create();
-            aes.Mode    = CipherMode.CBC;
-            aes.Padding = PaddingMode.Zeros;
-            aes.Key     = aes128Key;
-            aes.IV      = iv;
+            // If key is all zeros → AES not configured → send plaintext (matches server plaintext mode)
+            byte[] cipher;
+            if (IsAllZeros(aes128Key))
+            {
+                cipher = padded;
+            }
+            else
+            {
+                // AES-128-CBC encrypt
+                using var aes = Aes.Create();
+                aes.Mode    = CipherMode.CBC;
+                aes.Padding = PaddingMode.Zeros;
+                aes.Key     = aes128Key;
+                aes.IV      = iv;
 
-            using var encryptor = aes.CreateEncryptor();
-            var cipher = encryptor.TransformFinalBlock(padded, 0, padded.Length);
+                using var encryptor = aes.CreateEncryptor();
+                cipher = encryptor.TransformFinalBlock(padded, 0, padded.Length);
+            }
 
             // Assemble frame (without CRC first)
             var frame = new byte[FrameMinLength];
@@ -153,6 +163,12 @@ namespace SecureProtocol
         {
             if (key.Length != 16)
                 throw new ArgumentException($"DSC uses AES-128: key must be 16 bytes, got {key.Length}");
+        }
+
+        private static bool IsAllZeros(byte[] key)
+        {
+            foreach (var b in key) if (b != 0) return false;
+            return true;
         }
 
         private static byte[] TrimNullBytes(byte[] data)

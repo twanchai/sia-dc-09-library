@@ -194,10 +194,11 @@ namespace SecureProtocol
 
             if (keyIsDefault)
             {
-                // AES not programmed on device → payload sent as plaintext
+                // DscAesKey = all zeros in config → assume device sends plaintext (AES disabled)
+                // If the payload looks like garbage below, the device HAS AES set — put the key in DscAesKey in config.json
                 siaPayload = TrimNulls(env.CipherBlock);
                 var raw16  = Encoding.ASCII.GetString(env.CipherBlock).TrimEnd('\0');
-                Log($"│  [{Ts()}] Step 5  AES not configured — reading payload as plaintext");
+                Log($"│  [{Ts()}] Step 5  DscAesKey not set in config — treating payload as plaintext");
                 Log($"│           raw (16 bytes): \"{raw16}\"");
 
                 // Try Contact ID decode

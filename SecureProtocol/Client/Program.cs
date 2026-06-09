@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using SecureProtocol;
 
@@ -13,10 +14,6 @@ using SecureProtocol;
 //      "AesKey":    "<64 hex chars = 32 bytes>",
 //      "DscAesKey": "<32 hex chars OR 16 ASCII chars — omit for factory default>"
 //    }
-//
-//  Usage:
-//    dotnet run
-//      → loads config.json
 //
 //  Commands:
 //    SecurePacket path:
@@ -41,7 +38,7 @@ using SecureProtocol;
 //      dsc-badcrc <payload>           — DSC frame with corrupted CRC
 //      dsc-badkey <payload>           — DSC frame with wrong key
 //
-//    quit
+//    quit / Ctrl+C
 // =====================================================================
 
 const string ConfigFile = "config.json";
@@ -77,17 +74,20 @@ Console.WriteLine("Commands: send | tamper | replay | dsc-cid | dsc | dsc-badcrc
 Console.WriteLine("  dsc-cid <event> [acct] [part] [zone] [q]");
 Console.WriteLine("    e.g.  dsc-cid 130            → Burglary alarm acct=9999 part=1 zone=1");
 Console.WriteLine("          dsc-cid 110 9999 1 2   → Fire alarm zone 2");
-Console.WriteLine("          dsc-cid 130 9999 1 1 3 → Burglary restore\n");
+Console.WriteLine("          dsc-cid 130 9999 1 1 3 → Burglary restore");
+Console.WriteLine("  ↑ ↓  = history   ← →  = cursor   Home/End   Esc = clear\n");
 
 var sender = new SecureSender(host, port, hmacKey, aesKey);
 sender.OnLog += Console.WriteLine;
 
 // ── REPL ──────────────────────────────────────────────────────────────────────
+var history = new List<string>();
+
 while (true)
 {
-    Console.Write("> ");
-    var line = Console.ReadLine();
+    var line = ReadLine(history);
     if (line is null || line.Equals("quit", StringComparison.OrdinalIgnoreCase)) break;
+    if (string.IsNullOrWhiteSpace(line)) continue;
 
     var tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
     var cmd    = tokens.Length > 0 ? tokens[0].ToLowerInvariant() : "";
@@ -99,9 +99,8 @@ while (true)
 
         if (cmd == "dsc-cid")
         {
-            // dsc-cid <event> [acct] [part] [zone] [q]
             int    eventCode = tokens.Length > 1 ? int.Parse(tokens[1]) : 130;
-            string account   = tokens.Length > 2 ? tokens[2]           : "9999";
+            string account   = tokens.Length > 2 ? tokens[2]            : "9999";
             int    partition = tokens.Length > 3 ? int.Parse(tokens[3]) : 1;
             int    zone      = tokens.Length > 4 ? int.Parse(tokens[4]) : 1;
             char   qualifier = tokens.Length > 5 ? tokens[5][0]         : '1';
@@ -139,3 +138,129 @@ while (true)
 }
 
 Console.WriteLine("[Client] Disconnected.");
+
+// ── History-aware readline ────────────────────────────────────────────────────
+
+static string? ReadLine(List<string> history, string prompt = "> ")
+{
+    // Non-interactive (piped input) — fall back to standard readline
+    if (Console.IsInputRedirected)
+    {
+        Console.Write(prompt);
+        return Console.ReadLine();
+    }
+
+    var buf     = new List<char>();
+    int cursor  = 0;
+    int histIdx = history.Count;   // points past end = "new input"
+    string saved = "";             // current draft saved while browsing history
+
+    Console.Write(prompt);
+
+    while (true)
+    {
+        ConsoleKeyInfo k;
+        try   { k = Console.ReadKey(intercept: true); }
+        catch { return null; }
+
+        switch (k.Key)
+        {
+            // ── Submit ────────────────────────────────────────────────────
+            case ConsoleKey.Enter:
+                Console.WriteLine();
+                var result = new string(buf.ToArray());
+                if (!string.IsNullOrWhiteSpace(result) &&
+                    (history.Count == 0 || history[^1] != result))
+                    history.Add(result);
+                return result;
+
+            // ── Ctrl+C ────────────────────────────────────────────────────
+            case ConsoleKey.C when k.Modifiers.HasFlag(ConsoleModifiers.Control):
+                Console.WriteLine("^C");
+                return null;
+
+            // ── Escape — clear line ───────────────────────────────────────
+            case ConsoleKey.Escape:
+                buf.Clear(); cursor = 0; histIdx = history.Count; saved = "";
+                Redraw(prompt, buf, cursor);
+                break;
+
+            // ── Backspace ─────────────────────────────────────────────────
+            case ConsoleKey.Backspace:
+                if (cursor > 0) { buf.RemoveAt(--cursor); Redraw(prompt, buf, cursor); }
+                break;
+
+            // ── Delete ────────────────────────────────────────────────────
+            case ConsoleKey.Delete:
+                if (cursor < buf.Count) { buf.RemoveAt(cursor); Redraw(prompt, buf, cursor); }
+                break;
+
+            // ── Cursor movement ───────────────────────────────────────────
+            case ConsoleKey.LeftArrow:
+                if (cursor > 0)
+                    Console.SetCursorPosition(prompt.Length + --cursor, Console.CursorTop);
+                break;
+
+            case ConsoleKey.RightArrow:
+                if (cursor < buf.Count)
+                    Console.SetCursorPosition(prompt.Length + ++cursor, Console.CursorTop);
+                break;
+
+            case ConsoleKey.Home:
+                cursor = 0;
+                Console.SetCursorPosition(prompt.Length, Console.CursorTop);
+                break;
+
+            case ConsoleKey.End:
+                cursor = buf.Count;
+                Console.SetCursorPosition(prompt.Length + cursor, Console.CursorTop);
+                break;
+
+            // ── History navigation ────────────────────────────────────────
+            case ConsoleKey.UpArrow:
+                if (histIdx > 0)
+                {
+                    if (histIdx == history.Count)       // save draft before leaving
+                        saved = new string(buf.ToArray());
+                    SetBuf(prompt, buf, history[--histIdx], ref cursor);
+                }
+                break;
+
+            case ConsoleKey.DownArrow:
+                if (histIdx < history.Count)
+                {
+                    ++histIdx;
+                    var text = histIdx == history.Count ? saved : history[histIdx];
+                    SetBuf(prompt, buf, text, ref cursor);
+                }
+                break;
+
+            // ── Printable character ───────────────────────────────────────
+            default:
+                if (!char.IsControl(k.KeyChar))
+                {
+                    buf.Insert(cursor++, k.KeyChar);
+                    Redraw(prompt, buf, cursor);
+                }
+                break;
+        }
+    }
+}
+
+// Redraw entire editable area and reposition cursor
+static void Redraw(string prompt, List<char> buf, int cursor)
+{
+    int row = Console.CursorTop;
+    Console.SetCursorPosition(prompt.Length, row);
+    Console.Write(new string(buf.ToArray()) + " "); // trailing space clears deleted chars
+    Console.SetCursorPosition(prompt.Length + cursor, row);
+}
+
+// Replace buffer contents and move cursor to end
+static void SetBuf(string prompt, List<char> buf, string text, ref int cursor)
+{
+    buf.Clear();
+    buf.AddRange(text);
+    cursor = buf.Count;
+    Redraw(prompt, buf, cursor);
+}
