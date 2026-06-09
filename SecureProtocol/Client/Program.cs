@@ -7,21 +7,35 @@ using SecureProtocol;
 //
 //  Usage:
 //    dotnet run
-//      → dev mode, auto keys, no DSC
+//      → dev mode, auto keys, DSC factory-default key (zeros)
 //
 //    dotnet run -- <host> <port> <hmacHex> <aesHex> [dscAes128Hex]
-//      → full mode; supply dscAes128Hex to enable DSC commands
+//      → full mode; supply dscAes128Hex to override DSC key
 //
 //  Commands:
 //    SecurePacket path:
-//      send <msg>         — AES-256-GCM + HMAC-SHA256
-//      tamper <msg>       — corrupt payload (test rejection)
-//      replay             — send with old seq=1
+//      send <msg>                     — AES-256-GCM + HMAC-SHA256
+//      tamper <msg>                   — corrupt payload (test rejection)
+//      replay                         — send with old seq=1
 //
-//    DSC TL-series path (requires dscAes128Hex):
-//      dsc <msg>          — DSC binary frame, AES-128-CBC + CRC32
-//      dsc-badcrc <msg>   — DSC frame with corrupted CRC
-//      dsc-badkey <msg>   — DSC frame encrypted with wrong key
+//    DSC Contact ID path:
+//      dsc-cid <event> [acct] [part] [zone] [q]
+//                                     — DSC binary + Contact ID payload
+//                                       event = 3-digit code (130=Burg, 110=Fire, 120=Panic,
+//                                               401=Armed, 602=Test)
+//                                       acct  = account code (default 9999)
+//                                       part  = partition   (default 1)
+//                                       zone  = zone/user   (default 1)
+//                                       q     = qualifier   1=alarm 3=restore (default 1)
+//      Examples:
+//        dsc-cid 130            → Burglary alarm, acct 9999, part 1, zone 1
+//        dsc-cid 130 1234 1 5   → Burglary, acct 1234, part 1, zone 5
+//        dsc-cid 130 9999 1 1 3 → Burglary restore
+//
+//    DSC raw path:
+//      dsc <payload>                  — raw DSC binary frame (plaintext payload)
+//      dsc-badcrc <payload>           — DSC frame with corrupted CRC
+//      dsc-badkey <payload>           — DSC frame encrypted with wrong key
 //
 //    quit
 // =====================================================================
@@ -45,7 +59,7 @@ if (args.Length >= 4)
 else
 {
     host    = "127.0.0.1";
-    port    = 50005;
+    port    = 3061;
     hmacKey = CryptoHelper.GenerateHmacKey();
     aesKey  = CryptoHelper.GenerateAesKey();
     Console.WriteLine("[Client] Dev mode — generated keys:");
@@ -57,7 +71,11 @@ var sender = new SecureSender(host, port, hmacKey, aesKey);
 sender.OnLog += Console.WriteLine;
 
 Console.WriteLine($"[Client] Target {host}:{port}");
-Console.WriteLine("[Client] Commands: send | tamper | replay | dsc | dsc-badcrc | dsc-badkey | quit\n");
+Console.WriteLine("[Client] Commands: send | tamper | replay | dsc-cid | dsc | dsc-badcrc | dsc-badkey | quit\n");
+Console.WriteLine("  dsc-cid <event> [acct] [part] [zone] [q]");
+Console.WriteLine("    e.g.  dsc-cid 130            → Burglary alarm acct=9999 part=1 zone=1");
+Console.WriteLine("          dsc-cid 110 9999 1 2   → Fire alarm zone 2");
+Console.WriteLine("          dsc-cid 130 9999 1 1 3 → Burglary restore\n");
 
 while (true)
 {
@@ -65,15 +83,27 @@ while (true)
     var line = Console.ReadLine();
     if (line is null || line.Equals("quit", StringComparison.OrdinalIgnoreCase)) break;
 
-    var parts = line.Split(' ', 2);
-    var cmd   = parts[0].ToLowerInvariant();
-    var body  = parts.Length > 1 ? parts[1] : "test";
+    var tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+    var cmd    = tokens.Length > 0 ? tokens[0].ToLowerInvariant() : "";
+    var body   = tokens.Length > 1 ? string.Join(' ', tokens[1..]) : "test";
 
     try
     {
         string ack;
 
-        if (cmd.StartsWith("dsc"))
+        if (cmd == "dsc-cid")
+        {
+            // dsc-cid <event> [acct] [part] [zone] [q]
+            int  eventCode = tokens.Length > 1 ? int.Parse(tokens[1])       : 130;
+            string account = tokens.Length > 2 ? tokens[2]                  : "9999";
+            int  partition = tokens.Length > 3 ? int.Parse(tokens[3])       : 1;
+            int  zone      = tokens.Length > 4 ? int.Parse(tokens[4])       : 1;
+            char qualifier = tokens.Length > 5 ? tokens[5][0]               : '1';
+
+            ack = await sender.SendDscContactIdAsync(
+                account, eventCode, partition, zone, qualifier, dscAesKey);
+        }
+        else if (cmd.StartsWith("dsc"))
         {
             ack = cmd switch
             {

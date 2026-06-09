@@ -98,6 +98,77 @@ namespace SecureProtocol
             return await RawSendAsync(frame, ct);
         }
 
+        /// <summary>
+        /// Send a DSC binary frame carrying a Contact ID payload.
+        ///
+        /// Contact ID format (16 ASCII chars): AAAAMMQEEEGGGZZZS
+        ///   ACCT  = account (4 chars)
+        ///   MM    = "18" (standard CID message type)
+        ///   Q     = qualifier  '1'=alarm  '3'=restore  '6'=status
+        ///   EEE   = event code (3 decimal digits, '0' encoded as 'A')
+        ///   GG    = partition  (2 decimal digits, '0' encoded as 'A')
+        ///   ZZZ   = zone/user  (3 decimal digits, '0' encoded as 'A')
+        ///   S     = checksum   (sum of all 16 hex values divisible by 15)
+        ///
+        /// Common event codes: 130=Burglary  110=Fire  120=Panic  401=Armed  602=Periodic Test
+        /// </summary>
+        public async Task<string> SendDscContactIdAsync(
+            string  account,
+            int     eventCode,
+            int     partition    = 1,
+            int     zone         = 1,
+            char    qualifier    = '1',
+            byte[]? dscAes128Key = null,
+            CancellationToken ct = default)
+        {
+            dscAes128Key ??= new byte[16];   // factory default (zeros = plaintext)
+
+            var cid   = BuildContactId(account, qualifier, eventCode, partition, zone);
+            var bytes = Encoding.ASCII.GetBytes(cid);
+
+            var eventName = ContactIdParser.LookupEvent(eventCode);
+            Log($"[Client/DSC-CID] Account={account}  Q={qualifier}  " +
+                $"Event={eventCode:000} ({eventName})  Part={partition:00}  Zone={zone:000}");
+            Log($"[Client/DSC-CID] CID frame: \"{cid}\"");
+
+            return await SendDscAsync(cid, dscAes128Key, ct: ct);
+        }
+
+        // ── Contact ID builder ───────────────────────────────────────────────────
+
+        /// <summary>
+        /// Build a 16-char Contact ID string.
+        /// Encodes '0' as 'A' in all fields (DTMF heritage).
+        /// Appends a checksum digit such that the sum of all 16 hex values is divisible by 15.
+        /// </summary>
+        public static string BuildContactId(string account, char qualifier,
+                                            int eventCode, int partition, int zone)
+        {
+            // Pad/trim account to exactly 4 chars
+            account = account.PadLeft(4, '0');
+            if (account.Length > 4) account = account[^4..];
+
+            string acct = account.Replace('0', 'A');
+            string evt  = $"{eventCode:000}".Replace('0', 'A');
+            string grp  = $"{partition:00}" .Replace('0', 'A');
+            string zn   = $"{zone:000}"     .Replace('0', 'A');
+
+            // Assemble 15 chars (without checksum)
+            string body = acct + "18" + qualifier + evt + grp + zn;
+
+            // Checksum: find S so that sum of all 16 CID hex values ≡ 0 (mod 15)
+            int sum = 0;
+            foreach (char c in body) sum += CidVal(c);
+            int csVal = (15 - sum % 15) % 15;
+            char cs   = csVal == 0 ? 'A' : (char)('0' + csVal);
+
+            return body + cs;
+        }
+
+        // CID digit value: 'A'=0, '0'-'9'=face value
+        private static int CidVal(char c)
+            => c == 'A' ? 0 : (c >= '0' && c <= '9' ? c - '0' : 0);
+
         // ── Internals ────────────────────────────────────────────────────────────
 
         private async Task<string> InternalSendAsync(byte[] payload, PacketType type,

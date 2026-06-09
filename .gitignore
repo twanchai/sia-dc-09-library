@@ -101,3 +101,4 @@ docker/openvpn-docker/bin/
 /SecureProtocol/Shared/bin
 /SecureProtocol/Client/obj
 SecureProtocol/.DS_Store
+/SecureProtocol/Client/bin

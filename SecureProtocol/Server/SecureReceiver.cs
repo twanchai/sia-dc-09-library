@@ -108,7 +108,7 @@ namespace SecureProtocol
                             Log($"└─ [{Ts()}] ⚠️  BOT DETECTED from {remote}");
                             Log($"   dump: {HexAsciiDump(lenBuf, 4)}");
                             Log($"   → {botName}");
-                            Log($"   ข้ามการเชื่อมต่อนี้ — รอ connection ถัดไป");
+                            Log($"   Skipping — waiting for next connection");
                             break;
                         }
 
