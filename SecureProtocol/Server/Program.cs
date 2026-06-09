@@ -8,16 +8,20 @@ using SecureProtocol;
 //
 //  Usage:
 //    dotnet run
-//      → auto-generate SecurePacket keys, DSC support disabled
+//      → dev mode: port 3061, auto-generated keys, DSC default key
 //
 //    dotnet run -- <port> <hmacHex> <aesHex> [dscAes128Hex]
-//      → use provided keys; supply dscAes128Hex (32 hex chars = 16 bytes)
-//         to enable DSC TL-series binary frame support
+//      → full mode; all keys provided explicitly
 //
 //  Frame auto-detection:
-//    byte[0] == 0x5F  → DSC binary path  (AES-128-CBC, CRC32)
-//    otherwise        → SecurePacket path (HMAC-SHA256, AES-256-GCM)
+//    byte[0] == 0x5F  → DSC TL-series binary (Contact ID / SIA, AES-128-CBC, CRC32)
+//    byte[0] == 0x0A  → SIA DC-09 standard (LF…CR frame)
+//    otherwise        → SecurePacket (HMAC-SHA256, AES-256-GCM)
+//
+//  Default port: 3061 (SIA DC-09 standard port)
 // =====================================================================
+
+const int DefaultPort = 3061;
 
 int    port;
 byte[] hmacKey;
@@ -36,7 +40,7 @@ if (args.Length >= 3)
 }
 else
 {
-    port    = 3061;
+    port    = DefaultPort;
     hmacKey = CryptoHelper.GenerateHmacKey();
     aesKey  = CryptoHelper.GenerateAesKey();
 

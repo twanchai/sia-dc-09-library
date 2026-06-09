@@ -45,7 +45,7 @@ if (args.Length >= 4)
 else
 {
     host    = "127.0.0.1";
-    port    = 3061;
+    port    = 50005;
     hmacKey = CryptoHelper.GenerateHmacKey();
     aesKey  = CryptoHelper.GenerateAesKey();
     Console.WriteLine("[Client] Dev mode — generated keys:");

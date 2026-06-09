@@ -42,7 +42,7 @@ namespace SecureProtocol
         {
             _listener = new TcpListener(IPAddress.Any, _port);
             _listener.Start();
-            Log($"[Server] Listening on port {_port}");
+            Log($"[Server] Listening on TCP 0.0.0.0:{_port}  (all interfaces)");
             Log($"[Server] DSC support: {(_dscAesKey != null ? "ENABLED" : "disabled")}");
 
             while (!ct.IsCancellationRequested)
@@ -106,7 +106,8 @@ namespace SecureProtocol
                         {
                             var botName = DetectBot(lenBuf);
                             Log($"└─ [{Ts()}] ⚠️  BOT DETECTED from {remote}");
-                            Log($"   pattern = {lenBuf.Hex()} = \"{PrintAscii(lenBuf)}\"  →  {botName}");
+                            Log($"   dump: {HexAsciiDump(lenBuf, 4)}");
+                            Log($"   → {botName}");
                             Log($"   ข้ามการเชื่อมต่อนี้ — รอ connection ถัดไป");
                             break;
                         }
@@ -114,11 +115,16 @@ namespace SecureProtocol
                         // ── Step 3: Read packet body ───────────────────────────────
                         var data = new byte[totalLen];
                         if (!await ReadExactAsync(stream, data, ct)) break;
-                        Log($"│  [{Ts()}] Step 3  RX {totalLen} bytes  raw[0..7] = {data.HexHead(8)}");
+                        Log($"│  [{Ts()}] Step 3  RX {totalLen} bytes");
+                        Log($"│           dump: {HexAsciiDump(data)}");
 
                         await HandleSecurePacketAsync(stream, data, validator, remote, ct);
                     }
                 }
+            }
+            catch (IOException)
+            {
+                // Peer closed / reset connection — normal for scanners and short-lived clients
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -145,7 +151,8 @@ namespace SecureProtocol
             rest.CopyTo(raw, 1);
 
             Log($"│  [{Ts()}] Step 2  RX {raw.Length} bytes (DSC frame complete)");
-            Log($"│           raw = {raw.Hex()}");
+            Log($"│           dump: {HexAsciiDump(raw)}");
+            Log($"│           full: {raw.Hex()}");
 
             // ── Step 3: Parse envelope fields ─────────────────────────────────────
             DscEnvelope env;
@@ -259,6 +266,7 @@ namespace SecureProtocol
             var raw = ms.ToArray();
             var sia = Encoding.ASCII.GetString(raw);
             Log($"│  [{Ts()}] Step 2  RX {bytesRead} bytes total (LF + body + CR)");
+            Log($"│           dump: {HexAsciiDump(raw)}");
 
             // ── Step 3: Parse SIA DC-09 fields ────────────────────────────────────
             // Format: CCCC 0LLL "ID" seq R<rcvr> L<pref> #<acct> [data] <ts>
@@ -399,6 +407,35 @@ namespace SecureProtocol
             var sb = new System.Text.StringBuilder();
             foreach (var b in buf) sb.Append(b >= 32 && b < 127 ? (char)b : '.');
             return sb.ToString();
+        }
+
+        // ── Hex+ASCII dump ───────────────────────────────────────────────────────
+        /// <summary>
+        /// Format up to <paramref name="take"/> bytes as a hex-editor line.
+        /// Output: "XX XX XX XX XX XX XX XX  XX XX XX XX XX XX XX XX  |................|"
+        /// </summary>
+        private static string HexAsciiDump(byte[] data, int take = 16)
+        {
+            int n = Math.Min(data.Length, take);
+            var hex = new StringBuilder();
+            var asc = new StringBuilder();
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (i < n)
+                {
+                    hex.Append($"{data[i]:X2} ");
+                    asc.Append(data[i] >= 32 && data[i] < 127 ? (char)data[i] : '.');
+                }
+                else
+                {
+                    hex.Append("   ");   // padding for short packets
+                    asc.Append(' ');
+                }
+                if (i == 7) hex.Append(' ');  // mid-line gap
+            }
+
+            return $"{hex} |{asc}|  ({n} bytes)";
         }
 
         // ── Log helpers ──────────────────────────────────────────────────────────
