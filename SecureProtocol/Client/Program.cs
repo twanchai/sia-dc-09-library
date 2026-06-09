@@ -5,12 +5,18 @@ using SecureProtocol;
 // =====================================================================
 //  SecureProtocol — Client (SPT / Signal Path Transmitter)
 //
+//  Config file (config.json — same directory as executable):
+//    {
+//      "Host":      "127.0.0.1",
+//      "Port":      50005,
+//      "HmacKey":   "<64 hex chars = 32 bytes>",
+//      "AesKey":    "<64 hex chars = 32 bytes>",
+//      "DscAesKey": "<32 hex chars OR 16 ASCII chars — omit for factory default>"
+//    }
+//
 //  Usage:
 //    dotnet run
-//      → dev mode, auto keys, DSC factory-default key (zeros)
-//
-//    dotnet run -- <host> <port> <hmacHex> <aesHex> [dscAes128Hex]
-//      → full mode; supply dscAes128Hex to override DSC key
+//      → loads config.json
 //
 //  Commands:
 //    SecurePacket path:
@@ -20,63 +26,63 @@ using SecureProtocol;
 //
 //    DSC Contact ID path:
 //      dsc-cid <event> [acct] [part] [zone] [q]
-//                                     — DSC binary + Contact ID payload
-//                                       event = 3-digit code (130=Burg, 110=Fire, 120=Panic,
-//                                               401=Armed, 602=Test)
-//                                       acct  = account code (default 9999)
-//                                       part  = partition   (default 1)
-//                                       zone  = zone/user   (default 1)
-//                                       q     = qualifier   1=alarm 3=restore (default 1)
+//        event = 3-digit code (130=Burg, 110=Fire, 120=Panic, 401=Armed, 602=Test)
+//        acct  = account code        (default: 9999)
+//        part  = partition number    (default: 1)
+//        zone  = zone/user number    (default: 1)
+//        q     = qualifier           1=alarm  3=restore  (default: 1)
 //      Examples:
-//        dsc-cid 130            → Burglary alarm, acct 9999, part 1, zone 1
-//        dsc-cid 130 1234 1 5   → Burglary, acct 1234, part 1, zone 5
-//        dsc-cid 130 9999 1 1 3 → Burglary restore
+//        dsc-cid 130              → Burglary alarm, acct=9999, part=1, zone=1
+//        dsc-cid 110 9999 1 2     → Fire alarm, zone 2
+//        dsc-cid 130 9999 1 1 3   → Burglary restore
 //
 //    DSC raw path:
-//      dsc <payload>                  — raw DSC binary frame (plaintext payload)
+//      dsc <payload>                  — raw DSC frame (plaintext payload)
 //      dsc-badcrc <payload>           — DSC frame with corrupted CRC
-//      dsc-badkey <payload>           — DSC frame encrypted with wrong key
+//      dsc-badkey <payload>           — DSC frame with wrong key
 //
 //    quit
 // =====================================================================
 
-string host;
-int    port;
-byte[] hmacKey;
-byte[] aesKey;
-byte[]? dscAesKey = null;
+const string ConfigFile = "config.json";
 
-if (args.Length >= 4)
+// ── Load config ───────────────────────────────────────────────────────────────
+AppConfig cfg;
+try
 {
-    host    = args[0];
-    port    = int.Parse(args[1]);
-    hmacKey = Convert.FromHexString(args[2]);
-    aesKey  = Convert.FromHexString(args[3]);
-    dscAesKey = args.Length >= 5 ? ParseDscKey(args[4]) : new byte[16];
-    Console.WriteLine($"[Client] Connecting to {host}:{port}");
-    Console.WriteLine($"[Client] DSC key: {(IsDefaultKey(dscAesKey) ? "factory default (zeros)" : "custom")}");
+    cfg = AppConfig.Load(ConfigFile);
+    Console.WriteLine($"[Client] Loaded config from {ConfigFile}");
 }
-else
+catch (Exception ex)
 {
-    host    = "127.0.0.1";
-    port    = 3061;
-    hmacKey = CryptoHelper.GenerateHmacKey();
-    aesKey  = CryptoHelper.GenerateAesKey();
-    Console.WriteLine("[Client] Dev mode — generated keys:");
-    Console.WriteLine($"  HMAC : {Convert.ToHexString(hmacKey)}");
-    Console.WriteLine($"  AES  : {Convert.ToHexString(aesKey)}\n");
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine($"[Client] Config error: {ex.Message}");
+    Console.ResetColor();
+    Console.WriteLine("Run the Server once to generate config.json, then copy HmacKey + AesKey here.");
+    return;
 }
 
-var sender = new SecureSender(host, port, hmacKey, aesKey);
-sender.OnLog += Console.WriteLine;
+string host      = cfg.Host;
+int    port      = cfg.Port;
+byte[] hmacKey   = cfg.GetHmacKeyBytes();
+byte[] aesKey    = cfg.GetAesKeyBytes();
+byte[] dscAesKey = cfg.GetDscAesKeyBytes();
 
-Console.WriteLine($"[Client] Target {host}:{port}");
-Console.WriteLine("[Client] Commands: send | tamper | replay | dsc-cid | dsc | dsc-badcrc | dsc-badkey | quit\n");
+Console.WriteLine($"[Client] Target    : {host}:{port}");
+Console.WriteLine($"[Client] HmacKey   : {cfg.HmacKey[..16]}... ({hmacKey.Length} bytes)");
+Console.WriteLine($"[Client] AesKey    : {cfg.AesKey[..16]}... ({aesKey.Length} bytes)");
+Console.WriteLine($"[Client] DscAesKey : {(cfg.DscAesKeyIsDefault() ? "factory default (zeros)" : cfg.DscAesKey[..8] + "...")}");
+Console.WriteLine();
+Console.WriteLine("Commands: send | tamper | replay | dsc-cid | dsc | dsc-badcrc | dsc-badkey | quit");
 Console.WriteLine("  dsc-cid <event> [acct] [part] [zone] [q]");
 Console.WriteLine("    e.g.  dsc-cid 130            → Burglary alarm acct=9999 part=1 zone=1");
 Console.WriteLine("          dsc-cid 110 9999 1 2   → Fire alarm zone 2");
 Console.WriteLine("          dsc-cid 130 9999 1 1 3 → Burglary restore\n");
 
+var sender = new SecureSender(host, port, hmacKey, aesKey);
+sender.OnLog += Console.WriteLine;
+
+// ── REPL ──────────────────────────────────────────────────────────────────────
 while (true)
 {
     Console.Write("> ");
@@ -94,14 +100,14 @@ while (true)
         if (cmd == "dsc-cid")
         {
             // dsc-cid <event> [acct] [part] [zone] [q]
-            int  eventCode = tokens.Length > 1 ? int.Parse(tokens[1])       : 130;
-            string account = tokens.Length > 2 ? tokens[2]                  : "9999";
-            int  partition = tokens.Length > 3 ? int.Parse(tokens[3])       : 1;
-            int  zone      = tokens.Length > 4 ? int.Parse(tokens[4])       : 1;
-            char qualifier = tokens.Length > 5 ? tokens[5][0]               : '1';
+            int    eventCode = tokens.Length > 1 ? int.Parse(tokens[1]) : 130;
+            string account   = tokens.Length > 2 ? tokens[2]           : "9999";
+            int    partition = tokens.Length > 3 ? int.Parse(tokens[3]) : 1;
+            int    zone      = tokens.Length > 4 ? int.Parse(tokens[4]) : 1;
+            char   qualifier = tokens.Length > 5 ? tokens[5][0]         : '1';
 
             ack = await sender.SendDscContactIdAsync(
-                account, eventCode, partition, zone, qualifier, dscAesKey);
+                      account, eventCode, partition, zone, qualifier, dscAesKey);
         }
         else if (cmd.StartsWith("dsc"))
         {
@@ -133,28 +139,3 @@ while (true)
 }
 
 Console.WriteLine("[Client] Disconnected.");
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-static byte[] ParseDscKey(string input)
-{
-    input = input.Trim();
-    if (input.Length == 32 && IsHex(input))
-        return Convert.FromHexString(input);
-    if (input.Length == 16)
-        return System.Text.Encoding.ASCII.GetBytes(input);
-    throw new ArgumentException(
-        $"DSC key must be 32 hex chars or 16 ASCII chars, got {input.Length}: \"{input}\"");
-}
-
-static bool IsHex(string s)
-{
-    foreach (var c in s) if (!Uri.IsHexDigit(c)) return false;
-    return true;
-}
-
-static bool IsDefaultKey(byte[] key)
-{
-    foreach (var b in key) if (b != 0) return false;
-    return true;
-}
