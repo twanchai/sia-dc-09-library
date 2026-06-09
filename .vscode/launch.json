@@ -46,9 +46,10 @@
             "javaExec": "/Users/wanchai/.jdk/jdk-25.0.2/jdk-25.0.2+10/Contents/Home/bin/java"
         },
         {
-            "name": "C#: Launch Startup Project",
+            "name": "C#: Launch Server Project",
             "type": "dotnet",
-            "request": "launch"
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/SecureProtocol/Server/Server.csproj",
         }
     ]
 }
